@@ -1,0 +1,111 @@
+import time
+from threading import Thread, Lock
+import sys
+import math
+
+lock = Lock()
+
+color_map = {
+    '🌹': (255, 0, 127),
+    '💐': (60, 179, 113),
+    '💖': (255, 130, 255),
+    '🌏': (0, 140, 255),
+    '✨': (255, 195, 0),
+    '💄': (238, 130, 238),
+    '💌': (255, 215, 255),
+    '💗': (238, 130, 238),
+}
+
+def rainbow_color(i, total):
+    # Rainbow color for fallback
+    freq = 2 * math.pi / total
+    r = int(math.sin(freq * i + 0) * 127 + 128)
+    g = int(math.sin(freq * i + 2) * 127 + 128)
+    b = int(math.sin(freq * i + 4) * 127 + 128)
+    return (r, g, b)
+
+def get_target_color(text):
+    for c in reversed(text):
+        if c in color_map:
+            return color_map[c]
+    return None  # None artinya pakai rainbow
+
+def animate_text(text, delay=0.07):
+    with lock:
+        text = text.strip('\n')
+        target_color = get_target_color(text)
+        total_chars = len(text)
+        start_time = time.time()
+
+        sys.stdout.write("\0337")
+        sys.stdout.flush()
+        while True: 
+            elapsed_time = time.time() - start_time
+            current_char = int(elapsed_time // delay)
+
+            if current_char >= total_chars:
+                break
+
+            line = []
+            for i in range(current_char + 1):
+                time_since = max(elapsed_time - i*delay, 0)
+                ratio = time_since / (total_chars*delay - i*delay)
+                ratio = max(0, min(ratio, 1))
+                if target_color:
+                    r = int(255 - (255 - target_color[0]) * ratio)
+                    g = int(255 - (255 - target_color[1]) * ratio)
+                    b = int(255 - (255 - target_color[2]) * ratio)
+                else:
+                    r, g, b = rainbow_color(i, total_chars)
+                line.append(f"\033[38;2;{r};{g};{b}m{text[i]}\033[0m")
+            
+            # Progress bar
+            progress = int((current_char + 1) / total_chars * 20)
+            bar = "[" + "#" * progress + "-" * (20 - progress) + "]"
+
+            sys.stdout.write("\0338\033[2K")  # Restore cursor & clear line
+            sys.stdout.write("".join(line) + " " + bar)
+            sys.stdout.flush()
+            time.sleep(delay/3)
+        
+        # Show final text with color
+        sys.stdout.write("\0338\033[2K")
+        if target_color:
+            sys.stdout.write("".join([
+                f"\033[38;2;{target_color[0]};{target_color[1]};{target_color[2]}m{c}\033[0m"
+                for c in text
+            ]) + "\n\n")
+        else:
+            sys.stdout.write("".join([
+                f"\033[38;2;{rainbow_color(i, total_chars)[0]};{rainbow_color(i, total_chars)[1]};{rainbow_color(i, total_chars)[2]}m{c}\033[0m"
+                for i, c in enumerate(text)
+            ]) + "\n\n")
+        sys.stdout.flush()
+
+def sing_lyric(lyric, delay):
+    time.sleep(delay)
+    animate_text(lyric)
+
+def sing_song():
+    lyrics = [
+        ("Karna kamu cantik 🌹", 0.3),
+        ("Kan kuberi segalanya 💐 apa yang kupunya", 3.2),
+        ("Dan hatimu baik 💖", 6.8),
+        ("Sempurnalah duniaku 🌏 saat kau di sisiku", 10.5),
+        ("Bukan karna make up di wajahmu ✨", 14.0),
+        ("Atau lipstik merah itu 💄", 17.5),
+        ("Lembut hati tutur kata 💌", 21.5),
+        ("Terciptalah cinta yang kupuja 💗", 24.0),
+    ]
+    
+    threads = []
+    for lyric_text, lyric_delay in lyrics:
+        t = Thread(target=sing_lyric, args=(lyric_text, lyric_delay))
+        threads.append(t)
+        t.start()
+    
+    for thread in threads:
+        thread.join()
+
+if __name__ == "__main__":
+    sing_song()
